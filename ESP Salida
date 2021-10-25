@@ -1,0 +1,175 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <Servo.h>
+
+const char* ssid = "FaB";//replace this with your wifi access point 
+//name
+const char* password = "yoki_#777"; //replace with your wifi password
+const char* broker = "192.168.1.200"; //IP address of broker
+
+Servo servoMotor;
+
+//const char* ssid = "CLARO1_2B0DF0";
+//const char* password = "842O6QxFGw";
+
+const int port = 1883;
+const char* mqttUser = "user";
+const char* mqttPassword = "user";
+const int LEDCovid = D2;
+const int LEDPuerta =D3;
+const int Estufa   =D5;
+const int Ventilador   =D7;
+
+int puertaval = 0;
+int puertaoldval = 0;
+int state = 0;
+
+
+float val;
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void callback(char* topic, byte* payload, unsigned int length) {
+char buff_p[length];
+  for (int i = 0; i < length; i++)
+  {
+  //Serial.print((char)payload[i]);
+  buff_p[i] = (char)payload[i];
+  }
+  buff_p[length] = '\0';
+  String msg_p = String(buff_p);
+  val = msg_p.toFloat(); //to float
+}
+
+
+void setup() {
+
+  Serial.begin(9600);
+  servoMotor.attach(D6);
+  pinMode(LEDCovid, OUTPUT);
+  pinMode(LEDPuerta, OUTPUT);
+  pinMode(Estufa, OUTPUT);
+  pinMode(Ventilador,OUTPUT);
+
+  
+  digitalWrite(LEDPuerta,LOW);
+  digitalWrite(Estufa, LOW);
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting to WiFi..");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(100);
+    yield();
+  }
+
+  Serial.println("Connected to the WiFi network");
+
+  client.setServer(broker, port);
+  client.setCallback(callback);
+
+  while (!client.connected()) {
+    Serial.println("Connecting to MQTT...");
+
+    if (client.connect("ESP32Client", mqttUser, mqttPassword ))
+    {
+
+      Serial.println("connected to MQTT broker");
+
+    }
+    else
+    {
+
+      Serial.print("failed with state ");
+      Serial.print(client.state());
+      delay(500);
+
+    }
+  }
+
+ 
+//  Serial.println("ESP8266 AS SUBSCRIBER");
+//  Serial.println("Subscribing topic test:");
+
+}
+
+void alarmapuerta(){
+  client.subscribe("/casa/puerta/alarma");
+  puertaval= val;
+ Serial.println(val);
+ //delay(50);
+  if (puertaval == 1){
+  //  delay(10);    
+    digitalWrite(LEDPuerta, HIGH);
+  }
+  if(puertaval == 0){
+    digitalWrite(LEDPuerta,LOW);
+  }
+
+  client.loop();
+}
+
+
+
+void infrarrojo (){
+  client.subscribe("/casa/puerta/termometro");
+ 
+  Serial.println(val);
+  if(val == 4){
+  
+  Serial.println("covid");
+  digitalWrite(LEDCovid, HIGH);
+  }
+  if(val== 5){
+    digitalWrite(LEDCovid,LOW);
+  }
+  client.loop();
+
+  }
+
+
+
+void distancia(){
+  client.subscribe("/casa/cocina/alarma");
+  Serial.println(val);
+  if(val == 2){
+    
+    digitalWrite(Estufa, LOW);
+  }
+  if (val == 3){
+    digitalWrite(Estufa,HIGH);
+  }
+  client.loop();
+}
+void lluvia(){
+  client.subscribe("/hivernadero/lluvia");
+  Serial.println(val);
+  if(val==6){
+   servoMotor.write(180); 
+  }
+  if(val==7){
+    servoMotor.write(65);
+  }
+  client.loop();
+}
+
+void temperatura(){
+  client.subscribe("/casa/sala/temperatura");
+  Serial.println(val );
+  if(val==8){
+    digitalWrite(Ventilador,HIGH);
+  }
+  if(val==9){
+    digitalWrite(Ventilador,LOW);
+  }
+  client.loop();
+}
+
+void loop() {
+
+  alarmapuerta();
+  infrarrojo();
+  //distancia();
+  //lluvia();
+  //temperatura();
+  
+}
